@@ -1,4 +1,8 @@
+import logging
+
 from datetime import datetime, timedelta
+
+
 from random import choice, randint, uniform
 
 import pandas as pd
@@ -23,6 +27,13 @@ from config.constants import (
 
 faker = Faker()
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+)
+
+logger = logging.getLogger(__name__)
+
 def generate_dates(number_of_records: int) -> list[str]:
     """
     Generate random dates within the last 365 days.
@@ -37,6 +48,19 @@ def generate_dates(number_of_records: int) -> list[str]:
         dates.append(random_date.strftime("%Y-%m-%d"))
 
     return dates
+
+def generate_random_values(
+    values: list[str],
+    number_of_records: int,
+) -> list[str]:
+    """
+    Generate random values from a predefined list.
+    """
+
+    return [
+        choice(values)
+        for _ in range(number_of_records)
+    ]
 
 def generate_instance_ids(number_of_instances: int) -> list[str]:
     """
@@ -71,67 +95,69 @@ def generate_services(number_of_records: int) -> list[str]:
     Generate random AWS services.
     """
 
-    services = []
+    return generate_random_values(
+        SERVICES,
+        number_of_records,
+    )
 
-    for _ in range(number_of_records):
-        services.append(choice(SERVICES))
-
-    return services
+# def generate_regions(number_of_records: int) -> list[str]:
+#     """
+#     Generate random AWS regions.
+#     """
+#
+#     regions = []
+#
+#     for _ in range(number_of_records):
+#         regions.append(choice(REGIONS))
+#
+#     return regions
 
 def generate_regions(number_of_records: int) -> list[str]:
     """
     Generate random AWS regions.
     """
 
-    regions = []
-
-    for _ in range(number_of_records):
-        regions.append(choice(REGIONS))
-
-    return regions
+    return generate_random_values(
+        REGIONS,
+        number_of_records,
+    )
 
 def generate_environments(number_of_records: int) -> list[str]:
     """
     Generate random deployment environments.
     """
 
-    environments = []
-
-    for _ in range(number_of_records):
-        environments.append(choice(ENVIRONMENTS))
-
-    return environments
+    return generate_random_values(
+        ENVIRONMENTS,
+        number_of_records,
+    )
 
 def generate_project_names(number_of_records: int) -> list[str]:
     """
     Generate random project names.
     """
 
-    projects = []
-
-    for _ in range(number_of_records):
-        projects.append(choice(PROJECT_NAMES))
-
-    return projects
+    return generate_random_values(
+        PROJECT_NAMES,
+        number_of_records,
+    )
 
 def generate_team_names(number_of_records: int) -> list[str]:
     """
     Generate random team names.
     """
 
-    teams = []
-
-    for _ in range(number_of_records):
-        teams.append(choice(TEAM_NAMES))
-
-    return teams
+    return generate_random_values(
+        TEAM_NAMES,
+        number_of_records,
+    )
 
 
 def main() -> None:
     """
     Main function to generate synthetic cloud telemetry data.
     """
-
+    logger.info("Starting synthetic cloud telemetry generation...")
     dates = generate_dates(NUMBER_OF_RECORDS)
     services = generate_services(NUMBER_OF_RECORDS)
     regions = generate_regions(NUMBER_OF_RECORDS)
@@ -157,6 +183,7 @@ def main() -> None:
             "team_name": teams,
         }
     )
+    logger.info("Successfully created DataFrame with %d records.", len(df))
     print(df.head())
 
 if __name__ == "__main__":
