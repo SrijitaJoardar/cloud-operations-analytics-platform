@@ -1,4 +1,7 @@
+from pathlib import Path
+from validation.data_validator import DataValidator
 import logging
+
 
 from datetime import datetime, timedelta
 
@@ -89,6 +92,40 @@ def generate_instance_ids(number_of_instances: int) -> list[str]:
         instance_ids.append(f"i-{random_hex}")
 
     return instance_ids
+
+
+def generate_unique_record_keys(
+    number_of_records: int,
+    instance_pool: list[str],
+) -> list[tuple[str, str]]:
+    """
+    Generate unique (date, instance_id) pairs.
+    """
+
+    used_pairs = set()
+
+    record_keys = []
+
+    while len(record_keys) < number_of_records:
+
+        days_ago = randint(0, 364)
+
+        random_date = (
+            datetime.now() - timedelta(days=days_ago)
+        ).strftime("%Y-%m-%d")
+
+        instance_id = choice(instance_pool)
+
+        record_key = (
+            random_date,
+            instance_id,
+        )
+
+        if record_key not in used_pairs:
+            used_pairs.add(record_key)
+            record_keys.append(record_key)
+
+    return record_keys
 
 def assign_instance_ids(
     instance_ids: list[str],
@@ -360,33 +397,62 @@ def main() -> None:
     logger.info("Starting synthetic cloud telemetry generation...")
 
     try:
-        dates = generate_dates(NUMBER_OF_RECORDS)
+        instance_pool = generate_instance_ids(
+            NUMBER_OF_INSTANCES,
+        )
+
+        record_keys = generate_unique_record_keys(
+            NUMBER_OF_RECORDS,
+            instance_pool,
+        )
+
+        dates = []
+        instance_ids = []
+
+        for date, instance_id in record_keys:
+            dates.append(date)
+            instance_ids.append(instance_id)
+
         cloud_providers = generate_cloud_providers(
             NUMBER_OF_RECORDS,
         )
+
         account_ids = generate_account_ids(
             NUMBER_OF_RECORDS,
         )
+
         instance_types = generate_instance_types(
             NUMBER_OF_RECORDS,
         )
-        services = generate_services(NUMBER_OF_RECORDS)
-        regions = generate_regions(NUMBER_OF_RECORDS)
+
+        services = generate_services(
+            NUMBER_OF_RECORDS,
+        )
+
+        regions = generate_regions(
+            NUMBER_OF_RECORDS,
+        )
+
         availability_zones = generate_availability_zones(
             regions,
         )
+
         statuses = generate_status(
             NUMBER_OF_RECORDS,
         )
+
         cpu_usage = generate_cpu_usage(
             statuses,
         )
+
         memory_usage = generate_memory_usage(
             statuses,
         )
+
         storage_usage = generate_storage_usage(
             NUMBER_OF_RECORDS,
         )
+
         network_in = generate_network_in(
             statuses,
         )
@@ -394,22 +460,26 @@ def main() -> None:
         network_out = generate_network_out(
             statuses,
         )
+
         running_hours = generate_running_hours(
             statuses,
         )
+
         daily_cost = generate_daily_cost(
             instance_types,
             running_hours,
             statuses,
         )
-        environments = generate_environments(NUMBER_OF_RECORDS)
-        projects = generate_project_names(NUMBER_OF_RECORDS)
-        teams = generate_team_names(NUMBER_OF_RECORDS)
 
-        instance_pool = generate_instance_ids(NUMBER_OF_INSTANCES)
+        environments = generate_environments(
+            NUMBER_OF_RECORDS,
+        )
 
-        instance_ids = assign_instance_ids(
-            instance_pool,
+        projects = generate_project_names(
+            NUMBER_OF_RECORDS,
+        )
+
+        teams = generate_team_names(
             NUMBER_OF_RECORDS,
         )
 
@@ -434,7 +504,6 @@ def main() -> None:
                 "environment": environments,
                 "project_name": projects,
                 "team_name": teams,
-
             }
         )
 
@@ -442,6 +511,25 @@ def main() -> None:
             "Successfully created DataFrame with %d records.",
             len(df),
         )
+
+        Path(RAW_DATA_FILE).parent.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
+
+        df.to_csv(
+            RAW_DATA_FILE,
+            index=False,
+        )
+
+        logger.info(
+            "Dataset saved successfully to %s",
+            RAW_DATA_FILE,
+        )
+
+        validator = DataValidator(df)
+        validator.check_null_values()
+        validator.check_duplicate_records()
 
         print(df.head())
 
