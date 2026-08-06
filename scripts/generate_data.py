@@ -1,6 +1,7 @@
 from pathlib import Path
 from validation.data_validator import DataValidator
 import logging
+from profiling.data_profiler import DataProfiler
 
 
 from datetime import datetime, timedelta
@@ -530,8 +531,12 @@ def main() -> None:
         validator = DataValidator(df)
         validator.check_null_values()
         validator.check_duplicate_records()
+        validator.validate_all_ranges()
 
-        print(df.head())
+        profiler = DataProfiler(df)
+
+        profiler.generate_report()
+
 
     except Exception as error:
         logger.exception(

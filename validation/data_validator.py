@@ -1,6 +1,18 @@
 import pandas as pd
 
 
+from config.constants import (
+    CPU_USAGE_MIN,
+    CPU_USAGE_MAX,
+    MEMORY_USAGE_MIN,
+    MEMORY_USAGE_MAX,
+    RUNNING_HOURS_MIN,
+    RUNNING_HOURS_MAX,
+    DAILY_COST_MIN,
+    DAILY_COST_MAX,
+)
+
+
 class DataValidator:
     """
     Validate generated cloud telemetry data.
@@ -34,4 +46,66 @@ class DataValidator:
 
         print(
             f"Duplicate records: {duplicate_count}"
+        )
+
+    def validate_range(
+            self,
+            column_name: str,
+            minimum: float,
+            maximum: float,
+    ) -> None:
+        """
+        Validate that all values in a column fall
+        within the specified range.
+        """
+
+        invalid_records = self.dataframe[
+            (self.dataframe[column_name] < minimum)
+            | (self.dataframe[column_name] > maximum)
+            ]
+
+        print(f"\n{column_name} Validation")
+
+        print(
+            f"Invalid records: {len(invalid_records)}"
+        )
+
+    def validate_cpu_usage(self) -> None:
+        """
+        Validate CPU usage.
+        """
+
+        self.validate_range(
+            "cpu_usage",
+            CPU_USAGE_MIN,
+            CPU_USAGE_MAX,
+        )
+
+    def validate_all_ranges(self) -> None:
+        """
+        Validate all numeric columns.
+        """
+
+        self.validate_range(
+            "cpu_usage",
+            0,
+            100,
+        )
+
+        self.validate_range(
+            "memory_usage",
+            0,
+            100,
+        )
+
+        self.validate_range(
+            "running_hours",
+            0,
+            24,
+        )
+
+        self.validate_range(
+            "daily_cost_usd",
+            0,
+            1000,
         )
