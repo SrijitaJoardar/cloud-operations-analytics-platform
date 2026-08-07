@@ -7,7 +7,14 @@ DATA_DIR = PROJECT_ROOT / "data"
 RAW_DATA_DIR = DATA_DIR / "raw"
 PROCESSED_DATA_DIR = DATA_DIR / "processed"
 
-RAW_DATA_FILE = RAW_DATA_DIR / "cloud_usage.csv"
+RAW_DATA_FILE = (
+    RAW_DATA_DIR
+    / "cloud_usage.csv"
+)
+PROCESSED_DATA_FILE = (
+    PROCESSED_DATA_DIR
+    / "running_instances.parquet"
+)
 
 NUMBER_OF_RECORDS = 10_000
 NUMBER_OF_INSTANCES = 500
