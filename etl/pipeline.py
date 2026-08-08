@@ -5,10 +5,14 @@ from etl.transform import filter_running_instances
 from etl.transform import count_instances_by_region
 from etl.transform import average_by_region
 from etl.load import save_as_parquet
+
 from config.settings import RAW_DATA_FILE
 from config.settings import PROCESSED_DATA_FILE
 
-
+from pyspark.sql.window import Window
+from pyspark.sql.functions import row_number, col
+from etl.load import save_partitioned_parquet
+from etl.transform import demonstrate_partitioning
 
 
 
@@ -40,19 +44,240 @@ def main() -> None:
     )
 
     # ---------------------------------
-    # Transform
+    # Spark SQL Analytics
     # ---------------------------------
 
-    transformed_dataframe = select_required_columns(
-        dataframe,
+    dataframe.createOrReplaceTempView(
+        "cloud_usage"
     )
 
-    running_dataframe = filter_running_instances(
-        transformed_dataframe,
+    total_records = spark.sql(
+        """
+        SELECT
+            COUNT(*) AS total_records
+        FROM cloud_usage
+        """
     )
 
-    region_counts = count_instances_by_region(
-        running_dataframe,
+    print("\nTotal Records")
+
+    total_records.show(
+        truncate=False,
+    )
+
+    # ---------------------------------
+    # Running Instances by Region
+    # ---------------------------------
+
+    running_by_region = spark.sql(
+        """
+        SELECT
+            region,
+            COUNT(*) AS instance_count
+        FROM cloud_usage
+        WHERE status = 'Running'
+        GROUP BY region
+        ORDER BY instance_count DESC
+        """
+    )
+
+    # ---------------------------------
+    # Infrastructure Summary
+    # ---------------------------------
+
+    infrastructure_summary = spark.sql(
+        """
+        SELECT
+            ROUND(AVG(cpu_usage), 2)
+                AS average_cpu_usage,
+            ROUND(AVG(memory_usage), 2)
+                AS average_memory_usage,
+            ROUND(SUM(daily_cost_usd), 2)
+                AS total_daily_cost_usd,
+            ROUND(MAX(cpu_usage), 2)
+                AS maximum_cpu_usage,
+            ROUND(MIN(cpu_usage), 2)
+                AS minimum_cpu_usage
+        FROM cloud_usage
+        WHERE status = 'Running'
+        """
+    )
+
+    # ---------------------------------
+    # Cost by Region
+    # ---------------------------------
+
+    cost_by_region = spark.sql(
+        """
+        SELECT
+            region,
+            ROUND(SUM(daily_cost_usd), 2)
+                AS total_daily_cost_usd
+        FROM cloud_usage
+        WHERE status = 'Running'
+        GROUP BY region
+        ORDER BY total_daily_cost_usd DESC
+        """
+    )
+
+    # ---------------------------------
+    # Cost by Project
+    # ---------------------------------
+
+    cost_by_project = spark.sql(
+        """
+        SELECT
+            project_name,
+            COUNT(*) AS running_instances,
+            ROUND(SUM(daily_cost_usd), 2)
+                AS total_daily_cost_usd,
+            ROUND(AVG(daily_cost_usd), 2)
+                AS average_instance_cost_usd
+        FROM cloud_usage
+        WHERE status = 'Running'
+        GROUP BY project_name
+        ORDER BY total_daily_cost_usd DESC
+        """
+    )
+
+    # ---------------------------------
+    # Top 10 Most Expensive Instances
+    # ---------------------------------
+
+    top_expensive_instances = spark.sql(
+        """
+        SELECT
+            instance_id,
+            region,
+            project_name,
+            instance_type,
+            ROUND(daily_cost_usd, 2)
+                AS daily_cost_usd
+        FROM cloud_usage
+        WHERE status = 'Running'
+        ORDER BY daily_cost_usd DESC
+        LIMIT 10
+        """
+    )
+
+    # ---------------------------------
+    # Window Function
+    # Top 3 Expensive Instances
+    # Per Region
+    # ---------------------------------
+
+    window_spec = Window.partitionBy(
+        "region"
+    ).orderBy(
+        col("daily_cost_usd").desc()
+    )
+
+    ranked_instances = (
+        dataframe
+        .filter(
+            col("status") == "Running"
+        )
+        .withColumn(
+            "rank",
+            row_number().over(
+                window_spec
+            ),
+        )
+    )
+
+    top_3_by_region = (
+        ranked_instances
+        .filter(
+            col("rank") <= 3
+        )
+        .orderBy(
+            col("region"),
+            col("rank"),
+        )
+    )
+
+    # ---------------------------------
+    # Spark SQL Reports
+    # ---------------------------------
+
+    print(
+        "\n========== SPARK SQL REPORTS =========="
+    )
+
+    print("\nDaily Cloud Cost by Project")
+
+    cost_by_project.show(
+        truncate=False,
+    )
+
+    print(
+        "\nTop 10 Most Expensive Running Instances"
+    )
+
+    top_expensive_instances.show(
+        truncate=False,
+    )
+
+    print("\nDaily Cloud Cost by Region")
+
+    cost_by_region.show(
+        truncate=False,
+    )
+
+    print("\nRunning Infrastructure Summary")
+
+    infrastructure_summary.show(
+        truncate=False,
+    )
+
+    print(
+        "\nRunning Instances by Region - Spark SQL"
+    )
+
+    running_by_region.show(
+        truncate=False,
+    )
+
+    # ---------------------------------
+    # Window Function Report
+    # ---------------------------------
+
+    print(
+        "\nTop 3 Most Expensive Running "
+        "Instances by Region"
+    )
+
+    top_3_by_region.select(
+        "region",
+        "instance_id",
+        "project_name",
+        "instance_type",
+        "daily_cost_usd",
+        "rank",
+    ).show(
+        truncate=False,
+    )
+
+    # ---------------------------------
+    # DataFrame Transformations
+    # ---------------------------------
+
+    transformed_dataframe = (
+        select_required_columns(
+            dataframe,
+        )
+    )
+
+    running_dataframe = (
+        filter_running_instances(
+            transformed_dataframe,
+        )
+    )
+
+    region_counts = (
+        count_instances_by_region(
+            running_dataframe,
+        )
     )
 
     cpu_report = average_by_region(
@@ -66,10 +291,12 @@ def main() -> None:
     )
 
     # ---------------------------------
-    # Reports
+    # DataFrame Reports
     # ---------------------------------
 
-    print("\n========== CLOUD OPERATIONS REPORT ==========")
+    print(
+        "\n========== CLOUD OPERATIONS REPORT =========="
+    )
 
     print("\nAverage CPU Usage by Region")
 
@@ -96,6 +323,10 @@ def main() -> None:
         truncate=False,
     )
 
+    demonstrate_partitioning(
+        running_dataframe,
+    )
+
     # ---------------------------------
     # Load
     # ---------------------------------
@@ -104,8 +335,15 @@ def main() -> None:
         running_dataframe,
         str(PROCESSED_DATA_FILE),
     )
+    save_partitioned_parquet(
+        running_dataframe,
+        str(PROCESSED_DATA_FILE.parent / "running_instances_partitioned"),
+        "region",
+    )
 
-    print("\nParquet file saved successfully!")
+    print(
+        "\nParquet file saved successfully!"
+    )
 
     spark.stop()
 

@@ -78,3 +78,41 @@ def average_by_region(
             ).desc()
         )
     )
+
+def demonstrate_partitioning(
+    dataframe: DataFrame,
+) -> None:
+    """
+    Demonstrate Spark partition management.
+    """
+
+    print(
+        "\n========== PARTITION INFORMATION =========="
+    )
+
+    print(
+        "Original partitions:",
+        dataframe.rdd.getNumPartitions(),
+    )
+
+    repartitioned_dataframe = (
+        dataframe.repartition(10)
+    )
+
+    print(
+        "After repartition(10):",
+        repartitioned_dataframe
+        .rdd
+        .getNumPartitions(),
+    )
+
+    coalesced_dataframe = (
+        repartitioned_dataframe.coalesce(3)
+    )
+
+    print(
+        "After coalesce(3):",
+        coalesced_dataframe
+        .rdd
+        .getNumPartitions(),
+    )
