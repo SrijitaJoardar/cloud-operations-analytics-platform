@@ -16,5 +16,12 @@ PROCESSED_DATA_FILE = (
     / "running_instances.parquet"
 )
 
+REJECTED_DATA_FILE = (
+    PROJECT_ROOT
+    / "data"
+    / "processed"
+    / "rejected_records.parquet"
+)
+
 NUMBER_OF_RECORDS = 10_000
 NUMBER_OF_INSTANCES = 500

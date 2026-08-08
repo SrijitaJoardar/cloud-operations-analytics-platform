@@ -1,23 +1,33 @@
 # Python
+
 __pycache__/
 *.py[cod]
 *.pyo
 
 # Virtual Environment
+
 .venv/
 venv/
 
 # IDE
+
 .idea/
 .vscode/
 
 # Environment Variables
+
 .env
 
 # Logs
+
 logs/
 *.log
 
 # OS Files
+
 .DS_Store
 Thumbs.db
+
+# Generated Spark output
+
+data/processed/

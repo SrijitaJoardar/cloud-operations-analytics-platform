@@ -4,16 +4,28 @@ from etl.transform import select_required_columns
 from etl.transform import filter_running_instances
 from etl.transform import count_instances_by_region
 from etl.transform import average_by_region
-from etl.load import save_as_parquet
 
-from config.settings import RAW_DATA_FILE
-from config.settings import PROCESSED_DATA_FILE
+from config.settings import (
+    RAW_DATA_FILE,
+    PROCESSED_DATA_FILE,
+    REJECTED_DATA_FILE,
+)
 
 from pyspark.sql.window import Window
 from pyspark.sql.functions import row_number, col
 from etl.load import save_partitioned_parquet
+from etl.load import (
+    save_as_parquet,
+    save_rejected_records,
+)
 from etl.transform import demonstrate_partitioning
-
+from etl.data_quality import (
+    check_null_values,
+    check_range_values,
+    check_allowed_values,
+    check_duplicate_records,
+    split_valid_invalid_records,
+)
 
 
 
@@ -43,6 +55,83 @@ def main() -> None:
         str(RAW_DATA_FILE),
     )
 
+    # ---------------------------------
+    # Data Quality
+    # ---------------------------------
+
+    null_records = check_null_values(
+        dataframe,
+    )
+
+    range_invalid_records = check_range_values(
+        dataframe,
+    )
+
+    allowed_value_invalid_records = check_allowed_values(
+        dataframe,
+    )
+
+    duplicate_records = check_duplicate_records(
+        dataframe,
+    )
+    valid_dataframe, invalid_dataframe = (
+        split_valid_invalid_records(
+            dataframe,
+        )
+    )
+
+    # ---------------------------------
+    # Data Quality Report
+    # ---------------------------------
+
+    print("\n========== DATA QUALITY ==========")
+
+    print(
+        "Records with NULL values:",
+        null_records.count(),
+    )
+
+    print(
+        "Records with invalid numeric values:",
+        range_invalid_records.count(),
+    )
+
+    print(
+        "Records with invalid categorical values:",
+        allowed_value_invalid_records.count(),
+    )
+
+    print(
+        "Duplicate records:",
+        duplicate_records.count(),
+    )
+    print(
+        "Valid records:",
+        valid_dataframe.count(),
+    )
+
+    print(
+        "Invalid records:",
+        invalid_dataframe.count(),
+    )
+
+    # ---------------------------------
+    # Invalid Numeric Records
+    # ---------------------------------
+
+    print("\n========== INVALID NUMERIC RECORDS ==========")
+
+    range_invalid_records.select(
+        "instance_id",
+        "region",
+        "cpu_usage",
+        "memory_usage",
+        "running_hours",
+        "daily_cost_usd",
+    ).show(
+        20,
+        truncate=False,
+    )
     # ---------------------------------
     # Spark SQL Analytics
     # ---------------------------------
@@ -262,10 +351,8 @@ def main() -> None:
     # DataFrame Transformations
     # ---------------------------------
 
-    transformed_dataframe = (
-        select_required_columns(
-            dataframe,
-        )
+    transformed_dataframe = select_required_columns(
+        valid_dataframe,
     )
 
     running_dataframe = (
@@ -335,14 +422,18 @@ def main() -> None:
         running_dataframe,
         str(PROCESSED_DATA_FILE),
     )
-    save_partitioned_parquet(
-        running_dataframe,
-        str(PROCESSED_DATA_FILE.parent / "running_instances_partitioned"),
-        "region",
+
+    save_rejected_records(
+        invalid_dataframe,
+        str(REJECTED_DATA_FILE),
     )
 
     print(
-        "\nParquet file saved successfully!"
+        "\nValid data saved successfully!"
+    )
+
+    print(
+        "Rejected data saved successfully!"
     )
 
     spark.stop()
