@@ -31,3 +31,6 @@ Thumbs.db
 # Generated Spark output
 
 data/processed/
+
+logs/
+*.log
