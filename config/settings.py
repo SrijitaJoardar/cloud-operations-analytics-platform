@@ -10,6 +10,7 @@ PROCESSED_DATA_DIR = DATA_DIR / "processed"
 RAW_DATA_FILE = (
     RAW_DATA_DIR
     / "cloud_usage.csv"
+    #/ "data/raw/nonexistent.csv"
 )
 PROCESSED_DATA_FILE = (
     PROCESSED_DATA_DIR
