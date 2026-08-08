@@ -22,10 +22,22 @@ def run_stage(
 
     start_time = time.perf_counter()
 
-    result = stage_function(
-        *args,
-        **kwargs,
-    )
+    try:
+
+        result = stage_function(
+            *args,
+            **kwargs,
+        )
+
+    except Exception as exc:
+
+        logger.exception(
+            "%s stage failed: %s",
+            stage_name,
+            str(exc),
+        )
+
+        raise
 
     duration = (
         time.perf_counter()
