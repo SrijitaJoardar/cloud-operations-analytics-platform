@@ -1,9 +1,16 @@
 from etl.spark_session import create_spark_session
-from etl.extract import extract_cloud_usage_data
-from etl.transform import select_required_columns
-from etl.transform import filter_running_instances
-from etl.transform import count_instances_by_region
-from etl.transform import average_by_region
+
+from etl.stages import (
+    extract_data,
+    validate_data,
+    run_analytics,
+    transform_data,
+    load_data,
+)
+
+from etl.transform import (
+    demonstrate_partitioning,
+)
 
 from utils.logger import get_logger
 
@@ -11,45 +18,23 @@ import time
 
 from config.settings import (
     RAW_DATA_FILE,
-    PROCESSED_DATA_FILE,
-    REJECTED_DATA_FILE,
-    TOP_EXPENSIVE_INSTANCES,
     TOP_INSTANCES_PER_REGION,
-)
-
-from pyspark.sql.window import Window
-from pyspark.sql.functions import row_number, col
-
-from etl.load import (
-    save_as_parquet,
-    save_rejected_records,
-)
-
-from etl.transform import demonstrate_partitioning
-
-from etl.data_quality import (
-    check_null_values,
-    check_range_values,
-    check_allowed_values,
-    check_duplicate_records,
-    split_valid_invalid_records,
-    add_rejection_reason,
 )
 
 
 def main() -> None:
     """
-    Main ETL pipeline.
+    Main ETL pipeline orchestrator.
     """
 
     logger = get_logger(
         __name__
     )
 
-    pipeline_start_time = time.perf_counter()
+    pipeline_start_time = (
+        time.perf_counter()
+    )
 
-    # Initialize variables so that cleanup
-    # is safe even if the pipeline fails early.
     spark = None
     valid_dataframe = None
 
@@ -78,9 +63,11 @@ def main() -> None:
             "Starting data extraction."
         )
 
-        extract_start_time = time.perf_counter()
+        extract_start_time = (
+            time.perf_counter()
+        )
 
-        dataframe = extract_cloud_usage_data(
+        dataframe = extract_data(
             spark,
             str(RAW_DATA_FILE),
         )
@@ -95,60 +82,51 @@ def main() -> None:
             extract_duration,
         )
 
-        logger.info(
-            "Data extraction completed successfully."
-        )
-
         # ---------------------------------
         # Data Quality
         # ---------------------------------
 
-        quality_start_time = time.perf_counter()
+        quality_start_time = (
+            time.perf_counter()
+        )
 
-        null_records = check_null_values(
+        (
+            valid_dataframe,
+            invalid_dataframe,
+            quality_metrics,
+        ) = validate_data(
             dataframe,
         )
-
-        range_invalid_records = (
-            check_range_values(
-                dataframe,
-            )
-        )
-
-        allowed_value_invalid_records = (
-            check_allowed_values(
-                dataframe,
-            )
-        )
-
-        duplicate_records = (
-            check_duplicate_records(
-                dataframe,
-            )
-        )
-
-        valid_dataframe, invalid_dataframe = (
-            split_valid_invalid_records(
-                dataframe,
-            )
-        )
-
-        # Cache valid records because they are
-        # used multiple times in the pipeline.
-        valid_dataframe = valid_dataframe.cache()
 
         quality_duration = (
             time.perf_counter()
             - quality_start_time
         )
 
-        logger.info(
-            "Data quality stage completed in %.2f seconds.",
-            quality_duration,
+        # ---------------------------------
+        # Data Quality Metrics
+        # ---------------------------------
+
+        null_records = quality_metrics[
+            "null_records"
+        ]
+
+        range_invalid_records = (
+            quality_metrics[
+                "range_invalid_records"
+            ]
         )
 
-        invalid_dataframe = add_rejection_reason(
-            invalid_dataframe,
+        allowed_value_invalid_records = (
+            quality_metrics[
+                "allowed_value_invalid_records"
+            ]
+        )
+
+        duplicate_records = (
+            quality_metrics[
+                "duplicate_records"
+            ]
         )
 
         # ---------------------------------
@@ -159,7 +137,9 @@ def main() -> None:
             "\n========== DATA QUALITY =========="
         )
 
-        null_count = null_records.count()
+        null_count = (
+            null_records.count()
+        )
 
         invalid_numeric_count = (
             range_invalid_records.count()
@@ -235,166 +215,22 @@ def main() -> None:
             truncate=False,
         )
 
-        # ---------------------------------
-        # Spark SQL Analytics
-        # ---------------------------------
-
-        analytics_start_time = time.perf_counter()
-
-        dataframe.createOrReplaceTempView(
-            "cloud_usage"
+        logger.info(
+            "Data quality stage completed in %.2f seconds.",
+            quality_duration,
         )
 
         # ---------------------------------
-        # Total Records
+        # Analytics
         # ---------------------------------
 
-        total_records = spark.sql(
-            """
-            SELECT
-                COUNT(*) AS total_records
-            FROM cloud_usage
-            """
+        analytics_start_time = (
+            time.perf_counter()
         )
 
-        print(
-            "\nTotal Records"
-        )
-
-        total_records.show(
-            truncate=False,
-        )
-
-        # ---------------------------------
-        # Running Instances by Region
-        # ---------------------------------
-
-        running_by_region = spark.sql(
-            """
-            SELECT
-                region,
-                COUNT(*) AS instance_count
-            FROM cloud_usage
-            WHERE status = 'Running'
-            GROUP BY region
-            ORDER BY instance_count DESC
-            """
-        )
-
-        # ---------------------------------
-        # Infrastructure Summary
-        # ---------------------------------
-
-        infrastructure_summary = spark.sql(
-            """
-            SELECT
-                ROUND(AVG(cpu_usage), 2)
-                    AS average_cpu_usage,
-                ROUND(AVG(memory_usage), 2)
-                    AS average_memory_usage,
-                ROUND(SUM(daily_cost_usd), 2)
-                    AS total_daily_cost_usd,
-                ROUND(MAX(cpu_usage), 2)
-                    AS maximum_cpu_usage,
-                ROUND(MIN(cpu_usage), 2)
-                    AS minimum_cpu_usage
-            FROM cloud_usage
-            WHERE status = 'Running'
-            """
-        )
-
-        # ---------------------------------
-        # Cost by Region
-        # ---------------------------------
-
-        cost_by_region = spark.sql(
-            """
-            SELECT
-                region,
-                ROUND(SUM(daily_cost_usd), 2)
-                    AS total_daily_cost_usd
-            FROM cloud_usage
-            WHERE status = 'Running'
-            GROUP BY region
-            ORDER BY total_daily_cost_usd DESC
-            """
-        )
-
-        # ---------------------------------
-        # Cost by Project
-        # ---------------------------------
-
-        cost_by_project = spark.sql(
-            """
-            SELECT
-                project_name,
-                COUNT(*) AS running_instances,
-                ROUND(SUM(daily_cost_usd), 2)
-                    AS total_daily_cost_usd,
-                ROUND(AVG(daily_cost_usd), 2)
-                    AS average_instance_cost_usd
-            FROM cloud_usage
-            WHERE status = 'Running'
-            GROUP BY project_name
-            ORDER BY total_daily_cost_usd DESC
-            """
-        )
-
-        # ---------------------------------
-        # Top Expensive Instances
-        # ---------------------------------
-
-        top_expensive_instances = spark.sql(
-            f"""
-            SELECT
-                instance_id,
-                region,
-                project_name,
-                instance_type,
-                ROUND(daily_cost_usd, 2)
-                    AS daily_cost_usd
-            FROM cloud_usage
-            WHERE status = 'Running'
-            ORDER BY daily_cost_usd DESC
-            LIMIT {TOP_EXPENSIVE_INSTANCES}
-            """
-        )
-
-        # ---------------------------------
-        # Window Function
-        # Top Expensive Instances
-        # Per Region
-        # ---------------------------------
-
-        window_spec = Window.partitionBy(
-            "region"
-        ).orderBy(
-            col("daily_cost_usd").desc()
-        )
-
-        ranked_instances = (
-            dataframe
-            .filter(
-                col("status") == "Running"
-            )
-            .withColumn(
-                "rank",
-                row_number().over(
-                    window_spec
-                ),
-            )
-        )
-
-        top_3_by_region = (
-            ranked_instances
-            .filter(
-                col("rank")
-                <= TOP_INSTANCES_PER_REGION
-            )
-            .orderBy(
-                col("region"),
-                col("rank"),
-            )
+        analytics_results = run_analytics(
+            spark,
+            dataframe,
         )
 
         analytics_duration = (
@@ -408,8 +244,60 @@ def main() -> None:
         )
 
         # ---------------------------------
+        # Analytics Results
+        # ---------------------------------
+
+        total_records = analytics_results[
+            "total_records"
+        ]
+
+        running_by_region = (
+            analytics_results[
+                "running_by_region"
+            ]
+        )
+
+        infrastructure_summary = (
+            analytics_results[
+                "infrastructure_summary"
+            ]
+        )
+
+        cost_by_region = (
+            analytics_results[
+                "cost_by_region"
+            ]
+        )
+
+        cost_by_project = (
+            analytics_results[
+                "cost_by_project"
+            ]
+        )
+
+        top_expensive_instances = (
+            analytics_results[
+                "top_expensive_instances"
+            ]
+        )
+
+        top_instances_by_region = (
+            analytics_results[
+                "top_instances_by_region"
+            ]
+        )
+
+        # ---------------------------------
         # Spark SQL Reports
         # ---------------------------------
+
+        print(
+            "\nTotal Records"
+        )
+
+        total_records.show(
+            truncate=False,
+        )
 
         print(
             "\n========== SPARK SQL REPORTS =========="
@@ -460,11 +348,12 @@ def main() -> None:
         # ---------------------------------
 
         print(
-            f"\nTop {TOP_INSTANCES_PER_REGION} Most Expensive "
-            "Running Instances by Region"
+            f"\nTop {TOP_INSTANCES_PER_REGION} "
+            "Most Expensive Running "
+            "Instances by Region"
         )
 
-        top_3_by_region.select(
+        top_instances_by_region.select(
             "region",
             "instance_id",
             "project_name",
@@ -476,37 +365,20 @@ def main() -> None:
         )
 
         # ---------------------------------
-        # DataFrame Transformations
+        # Transformation
         # ---------------------------------
 
-        transform_start_time = time.perf_counter()
-
-        transformed_dataframe = (
-            select_required_columns(
-                valid_dataframe,
-            )
+        transform_start_time = (
+            time.perf_counter()
         )
 
-        running_dataframe = (
-            filter_running_instances(
-                transformed_dataframe,
-            )
-        )
-
-        region_counts = (
-            count_instances_by_region(
-                running_dataframe,
-            )
-        )
-
-        cpu_report = average_by_region(
+        (
             running_dataframe,
-            "cpu_usage",
-        )
-
-        memory_report = average_by_region(
-            running_dataframe,
-            "memory_usage",
+            region_counts,
+            cpu_report,
+            memory_report,
+        ) = transform_data(
+            valid_dataframe,
         )
 
         # ---------------------------------
@@ -550,10 +422,6 @@ def main() -> None:
             truncate=False,
         )
 
-        # ---------------------------------
-        # Partition Demonstration
-        # ---------------------------------
-
         demonstrate_partitioning(
             running_dataframe,
         )
@@ -572,28 +440,13 @@ def main() -> None:
         # Load
         # ---------------------------------
 
-        logger.info(
-            "Saving valid data."
+        load_start_time = (
+            time.perf_counter()
         )
 
-        load_start_time = time.perf_counter()
-
-        save_as_parquet(
+        load_data(
             running_dataframe,
-            str(PROCESSED_DATA_FILE),
-        )
-
-        logger.info(
-            "Valid data saved successfully."
-        )
-
-        logger.info(
-            "Saving rejected records."
-        )
-
-        save_rejected_records(
             invalid_dataframe,
-            str(REJECTED_DATA_FILE),
         )
 
         load_duration = (
@@ -652,27 +505,33 @@ def main() -> None:
         )
 
         print(
-            f"Extract: {extract_duration:.2f} seconds"
+            f"Extract: "
+            f"{extract_duration:.2f} seconds"
         )
 
         print(
-            f"Data Quality: {quality_duration:.2f} seconds"
+            f"Data Quality: "
+            f"{quality_duration:.2f} seconds"
         )
 
         print(
-            f"Analytics: {analytics_duration:.2f} seconds"
+            f"Analytics: "
+            f"{analytics_duration:.2f} seconds"
         )
 
         print(
-            f"Transformation: {transform_duration:.2f} seconds"
+            f"Transformation: "
+            f"{transform_duration:.2f} seconds"
         )
 
         print(
-            f"Load: {load_duration:.2f} seconds"
+            f"Load: "
+            f"{load_duration:.2f} seconds"
         )
 
         print(
-            f"Total Pipeline: {pipeline_duration:.2f} seconds"
+            f"Total Pipeline: "
+            f"{pipeline_duration:.2f} seconds"
         )
 
         logger.info(
@@ -684,6 +543,7 @@ def main() -> None:
         )
 
     except Exception:
+
         logger.exception(
             "Pipeline execution failed."
         )
