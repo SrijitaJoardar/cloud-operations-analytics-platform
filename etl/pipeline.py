@@ -1,5 +1,6 @@
 from etl.spark_session import create_spark_session
 from etl.pipeline_context import PipelineContext
+from etl.quality import calculate_quality_counts
 
 from etl.reporting import (
     print_data_quality_report,
@@ -102,9 +103,11 @@ def main() -> None:
         # Data Quality Metrics
         # ---------------------------------
 
-        null_records = context.quality_metrics[
-            "null_records"
-        ]
+        quality_counts = calculate_quality_counts(
+            quality_metrics=context.quality_metrics,
+            valid_dataframe=context.valid_dataframe,
+            invalid_dataframe=context.invalid_dataframe,
+        )
 
         range_invalid_records = (
             context.quality_metrics[
@@ -112,49 +115,37 @@ def main() -> None:
             ]
         )
 
-        allowed_value_invalid_records = (
-            context.quality_metrics[
-                "allowed_value_invalid_records"
-            ]
-        )
+        null_count = quality_counts[
+            "null_count"
+        ]
 
-        duplicate_records = (
-            context.quality_metrics[
-                "duplicate_records"
-            ]
-        )
+        invalid_numeric_count = quality_counts[
+            "invalid_numeric_count"
+        ]
+
+        invalid_categorical_count = quality_counts[
+            "invalid_categorical_count"
+        ]
+
+        duplicate_count = quality_counts[
+            "duplicate_count"
+        ]
+
+        valid_count = quality_counts[
+            "valid_count"
+        ]
+
+        invalid_count = quality_counts[
+            "invalid_count"
+        ]
+
+        total_count = quality_counts[
+            "total_count"
+        ]
 
         # ---------------------------------
         # Data Quality Report
         # ---------------------------------
-
-        null_count = (
-            null_records.count()
-        )
-
-        invalid_numeric_count = (
-            range_invalid_records.count()
-        )
-
-        invalid_categorical_count = (
-            allowed_value_invalid_records.count()
-        )
-
-        duplicate_count = (
-            duplicate_records.count()
-        )
-
-        valid_count = (
-            context.valid_dataframe.count()
-        )
-
-        invalid_count = (
-            context.invalid_dataframe.count()
-        )
-
-        total_count = (
-            valid_count + invalid_count
-        )
 
         print_data_quality_report(
             null_count=null_count,
@@ -230,70 +221,35 @@ def main() -> None:
         )
 
         # ---------------------------------
-        # Analytics Results
-        # ---------------------------------
-
-        total_records = context.analytics_results[
-            "total_records"
-        ]
-
-        running_by_region = (
-            context.analytics_results[
-                "running_by_region"
-            ]
-        )
-
-        infrastructure_summary = (
-            context.analytics_results[
-                "infrastructure_summary"
-            ]
-        )
-
-        cost_by_region = (
-            context.analytics_results[
-                "cost_by_region"
-            ]
-        )
-
-        cost_by_project = (
-            context.analytics_results[
-                "cost_by_project"
-            ]
-        )
-
-        top_expensive_instances = (
-            context.analytics_results[
-                "top_expensive_instances"
-            ]
-        )
-
-        top_instances_by_region = (
-            context.analytics_results[
-                "top_instances_by_region"
-            ]
-        )
-
-        # ---------------------------------
         # Spark SQL Reports
         # ---------------------------------
 
         print_spark_sql_report(
-            total_records=total_records,
-            cost_by_project=cost_by_project,
-            top_expensive_instances=top_expensive_instances,
-            cost_by_region=cost_by_region,
-            infrastructure_summary=infrastructure_summary,
-            running_by_region=running_by_region,
-            top_instances_by_region=top_instances_by_region,
+            total_records=context.analytics_results[
+                "total_records"
+            ],
+            cost_by_project=context.analytics_results[
+                "cost_by_project"
+            ],
+            top_expensive_instances=context.analytics_results[
+                "top_expensive_instances"
+            ],
+            cost_by_region=context.analytics_results[
+                "cost_by_region"
+            ],
+            infrastructure_summary=context.analytics_results[
+                "infrastructure_summary"
+            ],
+            running_by_region=context.analytics_results[
+                "running_by_region"
+            ],
+            top_instances_by_region=context.analytics_results[
+                "top_instances_by_region"
+            ],
             top_instances_per_region=TOP_INSTANCES_PER_REGION,
         )
 
-        # ---------------------------------
-        # Window Function Report
-        # ---------------------------------
 
-        # Window function output is already
-        # included in print_spark_sql_report()
 
         # ---------------------------------
         # Transformation
