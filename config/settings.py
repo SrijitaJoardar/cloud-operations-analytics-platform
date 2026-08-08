@@ -25,3 +25,14 @@ REJECTED_DATA_FILE = (
 
 NUMBER_OF_RECORDS = 10_000
 NUMBER_OF_INSTANCES = 500
+
+
+# ---------------------------------
+# Pipeline Configuration
+# ---------------------------------
+
+TOP_EXPENSIVE_INSTANCES = 10
+
+TOP_INSTANCES_PER_REGION = 3
+
+TARGET_PARTITIONS = 10

@@ -5,10 +5,14 @@ from etl.transform import filter_running_instances
 from etl.transform import count_instances_by_region
 from etl.transform import average_by_region
 from utils.logger import get_logger
+import time
 from config.settings import (
     RAW_DATA_FILE,
     PROCESSED_DATA_FILE,
     REJECTED_DATA_FILE,
+    TOP_EXPENSIVE_INSTANCES,
+    TOP_INSTANCES_PER_REGION,
+    TARGET_PARTITIONS,
 )
 
 from pyspark.sql.window import Window
@@ -40,6 +44,8 @@ def main() -> None:
         __name__
     )
 
+    pipeline_start_time = time.perf_counter()
+
     spark = None
 
     try:
@@ -66,10 +72,20 @@ def main() -> None:
         logger.info(
             "Starting data extraction."
         )
+        extract_start_time = time.perf_counter()
 
         dataframe = extract_cloud_usage_data(
             spark,
             str(RAW_DATA_FILE),
+        )
+        extract_duration = (
+                time.perf_counter()
+                - extract_start_time
+        )
+
+        logger.info(
+            "Extract stage completed in %.2f seconds.",
+            extract_duration,
         )
 
         logger.info(
@@ -79,7 +95,7 @@ def main() -> None:
         # ---------------------------------
         # Data Quality
         # ---------------------------------
-
+        quality_start_time = time.perf_counter()
         null_records = check_null_values(
             dataframe,
         )
@@ -109,6 +125,15 @@ def main() -> None:
         )
 
         valid_dataframe = valid_dataframe.cache()
+        quality_duration = (
+                time.perf_counter()
+                - quality_start_time
+        )
+
+        logger.info(
+            "Data quality stage completed in %.2f seconds.",
+            quality_duration,
+        )
 
         invalid_dataframe = add_rejection_reason(
             invalid_dataframe,
@@ -200,6 +225,8 @@ def main() -> None:
         # ---------------------------------
         # Spark SQL Analytics
         # ---------------------------------
+
+        analytics_start_time = time.perf_counter()
 
         dataframe.createOrReplaceTempView(
             "cloud_usage"
@@ -301,7 +328,7 @@ def main() -> None:
         # ---------------------------------
 
         top_expensive_instances = spark.sql(
-            """
+            f"""
             SELECT
                 instance_id,
                 region,
@@ -312,7 +339,7 @@ def main() -> None:
             FROM cloud_usage
             WHERE status = 'Running'
             ORDER BY daily_cost_usd DESC
-            LIMIT 10
+            LIMIT {TOP_EXPENSIVE_INSTANCES}
             """
         )
 
@@ -344,12 +371,22 @@ def main() -> None:
         top_3_by_region = (
             ranked_instances
             .filter(
-                col("rank") <= 3
+                col("rank") <= TOP_INSTANCES_PER_REGION
             )
             .orderBy(
                 col("region"),
                 col("rank"),
             )
+        )
+
+        analytics_duration = (
+                time.perf_counter()
+                - analytics_start_time
+        )
+
+        logger.info(
+            "Analytics stage completed in %.2f seconds.",
+            analytics_duration,
         )
 
         # ---------------------------------
@@ -405,7 +442,7 @@ def main() -> None:
         # ---------------------------------
 
         print(
-            "\nTop 3 Most Expensive Running "
+            f"\nTop {TOP_INSTANCES_PER_REGION} Most Expensive Running "
             "Instances by Region"
         )
 
@@ -423,6 +460,8 @@ def main() -> None:
         # ---------------------------------
         # DataFrame Transformations
         # ---------------------------------
+
+        transform_start_time = time.perf_counter()
 
         transformed_dataframe = (
             select_required_columns(
@@ -497,6 +536,16 @@ def main() -> None:
             running_dataframe,
         )
 
+        transform_duration = (
+                time.perf_counter()
+                - transform_start_time
+        )
+
+        logger.info(
+            "Transformation stage completed in %.2f seconds.",
+            transform_duration,
+        )
+
         # ---------------------------------
         # Load
         # ---------------------------------
@@ -504,6 +553,8 @@ def main() -> None:
         logger.info(
             "Saving valid data."
         )
+
+        load_start_time = time.perf_counter()
 
         save_as_parquet(
             running_dataframe,
@@ -523,6 +574,16 @@ def main() -> None:
         save_rejected_records(
             invalid_dataframe,
             str(REJECTED_DATA_FILE),
+        )
+
+        load_duration = (
+                time.perf_counter()
+                - load_start_time
+        )
+
+        logger.info(
+            "Load stage completed in %.2f seconds.",
+            load_duration,
         )
         print(
             "\n========== PIPELINE SUMMARY =========="
@@ -552,6 +613,83 @@ def main() -> None:
             "Pipeline status: SUCCESS"
         )
 
+        # ---------------------------------
+        # Pipeline Summary
+        # ---------------------------------
+
+        print(
+            "\n========== PIPELINE SUMMARY =========="
+        )
+
+        print(
+            f"Total records: {total_count}"
+        )
+
+        print(
+            f"Valid records: {valid_count}"
+        )
+
+        print(
+            f"Rejected records: {invalid_count}"
+        )
+
+        print(
+            f"Duplicate records: {duplicate_count}"
+        )
+
+        print(
+            f"NULL records: {null_count}"
+        )
+
+        print(
+            "Pipeline status: SUCCESS"
+        )
+
+        # ---------------------------------
+        # Pipeline Performance
+        # ---------------------------------
+
+        pipeline_duration = (
+                time.perf_counter()
+                - pipeline_start_time
+        )
+
+        print(
+            "\n========== PIPELINE PERFORMANCE =========="
+        )
+
+        print(
+            f"Extract: {extract_duration:.2f} seconds"
+        )
+
+        print(
+            f"Data Quality: {quality_duration:.2f} seconds"
+        )
+
+        print(
+            f"Analytics: {analytics_duration:.2f} seconds"
+        )
+
+        print(
+            f"Transformation: {transform_duration:.2f} seconds"
+        )
+
+        print(
+            f"Load: {load_duration:.2f} seconds"
+        )
+
+        print(
+            f"Total Pipeline: {pipeline_duration:.2f} seconds"
+        )
+
+        logger.info(
+            "Pipeline completed successfully."
+        )
+
+        valid_dataframe.unpersist()
+
+        spark.stop()
+
         logger.info(
             "Rejected data saved successfully."
         )
@@ -570,6 +708,10 @@ def main() -> None:
     finally:
 
         if spark is not None:
+            pipeline_duration = (
+                    time.perf_counter()
+                    - pipeline_start_time
+            )
 
             valid_dataframe.unpersist()
 
