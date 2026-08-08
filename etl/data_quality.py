@@ -1,5 +1,10 @@
 from pyspark.sql import DataFrame
-from pyspark.sql.functions import col
+
+from pyspark.sql.functions import (
+    col,
+    lit,
+    when,
+)
 
 
 REQUIRED_COLUMNS = [
@@ -182,4 +187,37 @@ def split_valid_invalid_records(
     return (
         valid_dataframe,
         invalid_dataframe,
+    )
+
+
+def add_rejection_reason(dataframe):
+    """
+    Add a rejection_reason column to invalid records.
+    """
+
+    return (
+        dataframe
+        .withColumn(
+            "rejection_reason",
+            when(
+                (col("cpu_usage") < 1)
+                | (col("cpu_usage") > 100)
+                | (col("memory_usage") < 1)
+                | (col("memory_usage") > 100)
+                | (col("running_hours") < 1)
+                | (col("running_hours") > 24)
+                | (col("daily_cost_usd") <= 0),
+                lit("INVALID_NUMERIC_VALUE"),
+            )
+            .when(
+                col("region").isNull()
+                | col("status").isNull()
+                | col("project_name").isNull()
+                | col("instance_type").isNull(),
+                lit("INVALID_CATEGORICAL_VALUE"),
+            )
+            .otherwise(
+                lit("UNKNOWN")
+            ),
+        )
     )

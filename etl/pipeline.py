@@ -27,6 +27,7 @@ from etl.data_quality import (
     check_allowed_values,
     check_duplicate_records,
     split_valid_invalid_records,
+    add_rejection_reason,
 )
 
 
@@ -105,6 +106,10 @@ def main() -> None:
             split_valid_invalid_records(
                 dataframe,
             )
+        )
+
+        invalid_dataframe = add_rejection_reason(
+            invalid_dataframe,
         )
 
         # ---------------------------------
@@ -510,6 +515,8 @@ def main() -> None:
         logger.info(
             "Saving rejected records."
         )
+
+
 
         save_rejected_records(
             invalid_dataframe,
