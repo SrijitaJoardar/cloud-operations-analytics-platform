@@ -1,5 +1,12 @@
 from etl.spark_session import create_spark_session
 from etl.pipeline_context import PipelineContext
+from etl.reporting import (
+    print_data_quality_report,
+    print_spark_sql_report,
+    print_cloud_operations_report,
+    print_pipeline_summary,
+    print_pipeline_performance,
+)
 
 from etl.stages import (
     extract_data,
@@ -100,11 +107,6 @@ def main() -> None:
             context.dataframe,
         )
 
-
-
-
-
-
         quality_duration = (
             time.perf_counter()
             - quality_start_time
@@ -140,9 +142,7 @@ def main() -> None:
         # Data Quality Report
         # ---------------------------------
 
-        print(
-            "\n========== DATA QUALITY =========="
-        )
+
 
         null_count = (
             null_records.count()
@@ -170,6 +170,15 @@ def main() -> None:
 
         total_count = (
             valid_count + invalid_count
+        )
+
+        print_data_quality_report(
+            null_count=null_count,
+            invalid_numeric_count=invalid_numeric_count,
+            invalid_categorical_count=invalid_categorical_count,
+            duplicate_count=duplicate_count,
+            valid_count=valid_count,
+            invalid_count=invalid_count,
         )
 
         logger.info(
@@ -300,56 +309,16 @@ def main() -> None:
         # Spark SQL Reports
         # ---------------------------------
 
-        print(
-            "\nTotal Records"
-        )
 
-        total_records.show(
-            truncate=False,
-        )
-
-        print(
-            "\n========== SPARK SQL REPORTS =========="
-        )
-
-        print(
-            "\nDaily Cloud Cost by Project"
-        )
-
-        cost_by_project.show(
-            truncate=False,
-        )
-
-        print(
-            "\nTop Expensive Running Instances"
-        )
-
-        top_expensive_instances.show(
-            truncate=False,
-        )
-
-        print(
-            "\nDaily Cloud Cost by Region"
-        )
-
-        cost_by_region.show(
-            truncate=False,
-        )
-
-        print(
-            "\nRunning Infrastructure Summary"
-        )
-
-        infrastructure_summary.show(
-            truncate=False,
-        )
-
-        print(
-            "\nRunning Instances by Region - Spark SQL"
-        )
-
-        running_by_region.show(
-            truncate=False,
+        print_spark_sql_report(
+            total_records=total_records,
+            cost_by_project=cost_by_project,
+            top_expensive_instances=top_expensive_instances,
+            cost_by_region=cost_by_region,
+            infrastructure_summary=infrastructure_summary,
+            running_by_region=running_by_region,
+            top_instances_by_region=top_instances_by_region,
+            top_instances_per_region=TOP_INSTANCES_PER_REGION,
         )
 
         # ---------------------------------
@@ -395,42 +364,13 @@ def main() -> None:
         # DataFrame Reports
         # ---------------------------------
 
-        print(
-            "\n========== CLOUD OPERATIONS REPORT =========="
+        print_cloud_operations_report(
+            cpu_report=cpu_report,
+            memory_report=memory_report,
+            region_counts=region_counts,
+            running_dataframe=context.running_dataframe,
         )
 
-        print(
-            "\nAverage CPU Usage by Region"
-        )
-
-        cpu_report.show(
-            truncate=False,
-        )
-
-        print(
-            "\nAverage Memory Usage by Region"
-        )
-
-        memory_report.show(
-            truncate=False,
-        )
-
-        print(
-            "\nRunning Instances by Region"
-        )
-
-        region_counts.show(
-            truncate=False,
-        )
-
-        print(
-            "\nRunning Instances Sample"
-        )
-
-        context.running_dataframe.show(
-            5,
-            truncate=False,
-        )
 
         demonstrate_partitioning(
             context.running_dataframe,
@@ -473,33 +413,14 @@ def main() -> None:
         # Pipeline Summary
         # ---------------------------------
 
-        print(
-            "\n========== PIPELINE SUMMARY =========="
+        print_pipeline_summary(
+            total_count=total_count,
+            valid_count=valid_count,
+            invalid_count=invalid_count,
+            duplicate_count=duplicate_count,
+            null_count=null_count,
         )
 
-        print(
-            f"Total records: {total_count}"
-        )
-
-        print(
-            f"Valid records: {valid_count}"
-        )
-
-        print(
-            f"Rejected records: {invalid_count}"
-        )
-
-        print(
-            f"Duplicate records: {duplicate_count}"
-        )
-
-        print(
-            f"NULL records: {null_count}"
-        )
-
-        print(
-            "Pipeline status: SUCCESS"
-        )
 
         # ---------------------------------
         # Pipeline Performance
@@ -510,46 +431,13 @@ def main() -> None:
             - pipeline_start_time
         )
 
-        print(
-            "\n========== PIPELINE PERFORMANCE =========="
-        )
-
-        print(
-            f"Extract: "
-            f"{extract_duration:.2f} seconds"
-        )
-
-        print(
-            f"Data Quality: "
-            f"{quality_duration:.2f} seconds"
-        )
-
-        print(
-            f"Analytics: "
-            f"{analytics_duration:.2f} seconds"
-        )
-
-        print(
-            f"Transformation: "
-            f"{transform_duration:.2f} seconds"
-        )
-
-        print(
-            f"Load: "
-            f"{load_duration:.2f} seconds"
-        )
-
-        print(
-            f"Total Pipeline: "
-            f"{pipeline_duration:.2f} seconds"
-        )
-
-        logger.info(
-            "Rejected data saved successfully."
-        )
-
-        logger.info(
-            "Pipeline completed successfully."
+        print_pipeline_performance(
+            extract_duration=extract_duration,
+            quality_duration=quality_duration,
+            analytics_duration=analytics_duration,
+            transform_duration=transform_duration,
+            load_duration=load_duration,
+            pipeline_duration=pipeline_duration,
         )
 
     except Exception:
