@@ -18,39 +18,52 @@ REQUIRED_COLUMNS = [
 ]
 
 
-def check_null_values(
-    dataframe: DataFrame,
-) -> DataFrame:
+VALID_STATUSES = [
+    "Running",
+    "Stopped",
+]
+
+
+VALID_REGIONS = [
+    "ap-south-1",
+    "ap-southeast-1",
+    "eu-west-1",
+    "us-east-1",
+    "us-west-2",
+]
+
+
+def build_null_condition():
     """
-    Identify records containing NULL values
+    Build condition for NULL values
     in required columns.
     """
 
     null_condition = None
 
     for column_name in REQUIRED_COLUMNS:
-        condition = col(column_name).isNull()
+
+        condition = (
+            col(column_name).isNull()
+        )
 
         if null_condition is None:
             null_condition = condition
+
         else:
             null_condition = (
                 null_condition | condition
             )
 
-    return dataframe.filter(
-        null_condition
-    )
+    return null_condition
 
-def check_range_values(
-    dataframe: DataFrame,
-) -> DataFrame:
+
+def build_numeric_invalid_condition():
     """
-    Identify records containing invalid
-    numeric values based on business rules.
+    Build condition for invalid numeric values.
     """
 
-    invalid_condition = (
+    return (
         (col("cpu_usage") <= 0)
         | (col("cpu_usage") >= 100)
         | (col("memory_usage") <= 0)
@@ -60,9 +73,60 @@ def check_range_values(
         | (col("daily_cost_usd") < 0)
     )
 
-    return dataframe.filter(
-        invalid_condition
+
+def build_categorical_invalid_condition():
+    """
+    Build condition for invalid categorical values.
+    """
+
+    return (
+        ~col("status").isin(
+            VALID_STATUSES
+        )
+        | ~col("region").isin(
+            VALID_REGIONS
+        )
     )
+
+
+def build_invalid_condition():
+    """
+    Build the complete data-quality
+    invalid-record condition.
+    """
+
+    return (
+        build_null_condition()
+        | build_numeric_invalid_condition()
+        | build_categorical_invalid_condition()
+    )
+
+
+def check_null_values(
+    dataframe: DataFrame,
+) -> DataFrame:
+    """
+    Identify records containing NULL values
+    in required columns.
+    """
+
+    return dataframe.filter(
+        build_null_condition()
+    )
+
+
+def check_range_values(
+    dataframe: DataFrame,
+) -> DataFrame:
+    """
+    Identify records containing invalid
+    numeric values based on business rules.
+    """
+
+    return dataframe.filter(
+        build_numeric_invalid_condition()
+    )
+
 
 def check_allowed_values(
     dataframe: DataFrame,
@@ -72,27 +136,10 @@ def check_allowed_values(
     categorical values.
     """
 
-    valid_statuses = [
-        "Running",
-        "Stopped",
-    ]
-
-    valid_regions = [
-        "ap-south-1",
-        "ap-southeast-1",
-        "eu-west-1",
-        "us-east-1",
-        "us-west-2",
-    ]
-
-    invalid_condition = (
-        ~col("status").isin(valid_statuses)
-        | ~col("region").isin(valid_regions)
-    )
-
     return dataframe.filter(
-        invalid_condition
+        build_categorical_invalid_condition()
     )
+
 
 def check_duplicate_records(
     dataframe: DataFrame,
@@ -130,6 +177,7 @@ def check_duplicate_records(
         )
     )
 
+
 def split_valid_invalid_records(
     dataframe: DataFrame,
 ) -> tuple[DataFrame, DataFrame]:
@@ -138,50 +186,20 @@ def split_valid_invalid_records(
     all configured data-quality rules.
     """
 
-    null_condition = None
-
-    for column_name in REQUIRED_COLUMNS:
-        condition = col(column_name).isNull()
-
-        if null_condition is None:
-            null_condition = condition
-        else:
-            null_condition = (
-                null_condition | condition
-            )
-
-    valid_statuses = [
-        "Running",
-        "Stopped",
-    ]
-
-    valid_regions = [
-        "ap-south-1",
-        "ap-southeast-1",
-        "eu-west-1",
-        "us-east-1",
-        "us-west-2",
-    ]
-
     invalid_condition = (
-        null_condition
-        | (col("cpu_usage") <= 0)
-        | (col("cpu_usage") >= 100)
-        | (col("memory_usage") <= 0)
-        | (col("memory_usage") >= 100)
-        | (col("running_hours") < 0)
-        | (col("running_hours") > 24)
-        | (col("daily_cost_usd") < 0)
-        | ~col("status").isin(valid_statuses)
-        | ~col("region").isin(valid_regions)
+        build_invalid_condition()
     )
 
-    invalid_dataframe = dataframe.filter(
-        invalid_condition
+    invalid_dataframe = (
+        dataframe.filter(
+            invalid_condition
+        )
     )
 
-    valid_dataframe = dataframe.filter(
-        ~invalid_condition
+    valid_dataframe = (
+        dataframe.filter(
+            ~invalid_condition
+        )
     )
 
     return (
@@ -190,9 +208,12 @@ def split_valid_invalid_records(
     )
 
 
-def add_rejection_reason(dataframe):
+def add_rejection_reason(
+    dataframe: DataFrame,
+) -> DataFrame:
     """
-    Add a rejection_reason column to invalid records.
+    Add a rejection_reason column
+    to invalid records.
     """
 
     return (
@@ -200,21 +221,16 @@ def add_rejection_reason(dataframe):
         .withColumn(
             "rejection_reason",
             when(
-                (col("cpu_usage") < 1)
-                | (col("cpu_usage") > 100)
-                | (col("memory_usage") < 1)
-                | (col("memory_usage") > 100)
-                | (col("running_hours") < 1)
-                | (col("running_hours") > 24)
-                | (col("daily_cost_usd") <= 0),
-                lit("INVALID_NUMERIC_VALUE"),
+                build_numeric_invalid_condition(),
+                lit(
+                    "INVALID_NUMERIC_VALUE"
+                ),
             )
             .when(
-                col("region").isNull()
-                | col("status").isNull()
-                | col("project_name").isNull()
-                | col("instance_type").isNull(),
-                lit("INVALID_CATEGORICAL_VALUE"),
+                build_categorical_invalid_condition(),
+                lit(
+                    "INVALID_CATEGORICAL_VALUE"
+                ),
             )
             .otherwise(
                 lit("UNKNOWN")
