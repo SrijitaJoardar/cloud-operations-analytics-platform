@@ -108,6 +108,8 @@ def main() -> None:
             )
         )
 
+        valid_dataframe = valid_dataframe.cache()
+
         invalid_dataframe = add_rejection_reason(
             invalid_dataframe,
         )
@@ -568,6 +570,8 @@ def main() -> None:
     finally:
 
         if spark is not None:
+
+            valid_dataframe.unpersist()
 
             spark.stop()
 
