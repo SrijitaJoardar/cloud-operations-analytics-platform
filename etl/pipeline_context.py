@@ -1,8 +1,7 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from pyspark.sql import DataFrame
-
 
 @dataclass
 class PipelineContext:
@@ -21,3 +20,7 @@ class PipelineContext:
     analytics_results: dict[str, DataFrame] | None = None
 
     running_dataframe: DataFrame | None = None
+
+    stage_durations: dict[str, float] = field(
+        default_factory=dict
+    )

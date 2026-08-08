@@ -217,11 +217,7 @@ def print_pipeline_summary(
     )
 
 def print_pipeline_performance(
-    extract_duration: float,
-    quality_duration: float,
-    analytics_duration: float,
-    transform_duration: float,
-    load_duration: float,
+    stage_durations: dict[str, float],
     pipeline_duration: float,
 ) -> None:
     """
@@ -234,27 +230,27 @@ def print_pipeline_performance(
 
     print(
         f"Extract: "
-        f"{extract_duration:.2f} seconds"
+        f"{stage_durations['Extract']:.2f} seconds"
     )
 
     print(
         f"Data Quality: "
-        f"{quality_duration:.2f} seconds"
+        f"{stage_durations['Data Quality']:.2f} seconds"
     )
 
     print(
         f"Analytics: "
-        f"{analytics_duration:.2f} seconds"
+        f"{stage_durations['Analytics']:.2f} seconds"
     )
 
     print(
         f"Transformation: "
-        f"{transform_duration:.2f} seconds"
+        f"{stage_durations['Transformation']:.2f} seconds"
     )
 
     print(
         f"Load: "
-        f"{load_duration:.2f} seconds"
+        f"{stage_durations['Load']:.2f} seconds"
     )
 
     print(

@@ -13,11 +13,12 @@ def run_stage(
     stage_name: str,
     stage_function: Callable[..., Any],
     *args: Any,
+    stage_durations: dict[str, float] | None = None,
     **kwargs: Any,
 ) -> tuple[Any, float]:
     """
     Execute a pipeline stage, measure its duration,
-    log the result, and return the result with duration.
+    log the result, and optionally store the duration.
     """
 
     start_time = time.perf_counter()
@@ -43,6 +44,11 @@ def run_stage(
         time.perf_counter()
         - start_time
     )
+
+    if stage_durations is not None:
+        stage_durations[
+            stage_name
+        ] = duration
 
     logger.info(
         "%s stage completed in %.2f seconds.",

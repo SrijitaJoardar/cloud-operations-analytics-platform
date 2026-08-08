@@ -75,11 +75,12 @@ def main() -> None:
             "Starting data extraction."
         )
 
-        context.dataframe, extract_duration = run_stage(
+        context.dataframe, _ = run_stage(
             "Extract",
             extract_data,
             spark,
             str(RAW_DATA_FILE),
+            stage_durations=context.stage_durations,
         )
 
         # ---------------------------------
@@ -92,11 +93,12 @@ def main() -> None:
                 context.invalid_dataframe,
                 context.quality_metrics,
             ),
-            quality_duration,
+            _,
         ) = run_stage(
             "Data Quality",
             validate_data,
             context.dataframe,
+            stage_durations=context.stage_durations,
         )
 
         # ---------------------------------
@@ -212,12 +214,13 @@ def main() -> None:
 
         (
             context.analytics_results,
-            analytics_duration,
+            _,
         ) = run_stage(
             "Analytics",
             run_analytics,
             spark,
             context.dataframe,
+            stage_durations=context.stage_durations,
         )
 
         # ---------------------------------
@@ -249,8 +252,6 @@ def main() -> None:
             top_instances_per_region=TOP_INSTANCES_PER_REGION,
         )
 
-
-
         # ---------------------------------
         # Transformation
         # ---------------------------------
@@ -262,11 +263,12 @@ def main() -> None:
                 cpu_report,
                 memory_report,
             ),
-            transform_duration,
+            _,
         ) = run_stage(
             "Transformation",
             transform_data,
             context.valid_dataframe,
+            stage_durations=context.stage_durations,
         )
 
         # ---------------------------------
@@ -290,12 +292,13 @@ def main() -> None:
 
         (
             _,
-            load_duration,
+            _,
         ) = run_stage(
             "Load",
             load_data,
             context.running_dataframe,
             context.invalid_dataframe,
+            stage_durations=context.stage_durations,
         )
 
         # ---------------------------------
@@ -320,11 +323,7 @@ def main() -> None:
         )
 
         print_pipeline_performance(
-            extract_duration=extract_duration,
-            quality_duration=quality_duration,
-            analytics_duration=analytics_duration,
-            transform_duration=transform_duration,
-            load_duration=load_duration,
+            stage_durations=context.stage_durations,
             pipeline_duration=pipeline_duration,
         )
 
