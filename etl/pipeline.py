@@ -1,4 +1,5 @@
 from etl.spark_session import create_spark_session
+from etl.pipeline_context import PipelineContext
 
 from etl.stages import (
     extract_data,
@@ -36,7 +37,7 @@ def main() -> None:
     )
 
     spark = None
-    valid_dataframe = None
+    context = PipelineContext()
 
     try:
 
@@ -67,10 +68,11 @@ def main() -> None:
             time.perf_counter()
         )
 
-        dataframe = extract_data(
+        context.dataframe = extract_data(
             spark,
             str(RAW_DATA_FILE),
         )
+
 
         extract_duration = (
             time.perf_counter()
@@ -91,12 +93,17 @@ def main() -> None:
         )
 
         (
-            valid_dataframe,
-            invalid_dataframe,
-            quality_metrics,
+            context.valid_dataframe,
+            context.invalid_dataframe,
+            context.quality_metrics,
         ) = validate_data(
-            dataframe,
+            context.dataframe,
         )
+
+
+
+
+
 
         quality_duration = (
             time.perf_counter()
@@ -107,24 +114,24 @@ def main() -> None:
         # Data Quality Metrics
         # ---------------------------------
 
-        null_records = quality_metrics[
+        null_records = context.quality_metrics[
             "null_records"
         ]
 
         range_invalid_records = (
-            quality_metrics[
+            context.quality_metrics[
                 "range_invalid_records"
             ]
         )
 
         allowed_value_invalid_records = (
-            quality_metrics[
+            context.quality_metrics[
                 "allowed_value_invalid_records"
             ]
         )
 
         duplicate_records = (
-            quality_metrics[
+            context.quality_metrics[
                 "duplicate_records"
             ]
         )
@@ -154,11 +161,11 @@ def main() -> None:
         )
 
         valid_count = (
-            valid_dataframe.count()
+            context.valid_dataframe.count()
         )
 
         invalid_count = (
-            invalid_dataframe.count()
+            context.invalid_dataframe.count()
         )
 
         total_count = (
@@ -228,10 +235,12 @@ def main() -> None:
             time.perf_counter()
         )
 
-        analytics_results = run_analytics(
+        context.analytics_results = run_analytics(
             spark,
-            dataframe,
+            context.dataframe,
         )
+
+
 
         analytics_duration = (
             time.perf_counter()
@@ -247,42 +256,42 @@ def main() -> None:
         # Analytics Results
         # ---------------------------------
 
-        total_records = analytics_results[
+        total_records = context.analytics_results[
             "total_records"
         ]
 
         running_by_region = (
-            analytics_results[
+            context.analytics_results[
                 "running_by_region"
             ]
         )
 
         infrastructure_summary = (
-            analytics_results[
+            context.analytics_results[
                 "infrastructure_summary"
             ]
         )
 
         cost_by_region = (
-            analytics_results[
+            context.analytics_results[
                 "cost_by_region"
             ]
         )
 
         cost_by_project = (
-            analytics_results[
+            context.analytics_results[
                 "cost_by_project"
             ]
         )
 
         top_expensive_instances = (
-            analytics_results[
+            context.analytics_results[
                 "top_expensive_instances"
             ]
         )
 
         top_instances_by_region = (
-            analytics_results[
+            context.analytics_results[
                 "top_instances_by_region"
             ]
         )
@@ -373,13 +382,14 @@ def main() -> None:
         )
 
         (
-            running_dataframe,
+            context.running_dataframe,
             region_counts,
             cpu_report,
             memory_report,
         ) = transform_data(
-            valid_dataframe,
+            context.valid_dataframe,
         )
+
 
         # ---------------------------------
         # DataFrame Reports
@@ -417,13 +427,13 @@ def main() -> None:
             "\nRunning Instances Sample"
         )
 
-        running_dataframe.show(
+        context.running_dataframe.show(
             5,
             truncate=False,
         )
 
         demonstrate_partitioning(
-            running_dataframe,
+            context.running_dataframe,
         )
 
         transform_duration = (
@@ -445,8 +455,8 @@ def main() -> None:
         )
 
         load_data(
-            running_dataframe,
-            invalid_dataframe,
+            context.running_dataframe,
+            context.invalid_dataframe,
         )
 
         load_duration = (
@@ -556,8 +566,8 @@ def main() -> None:
         # Cleanup
         # ---------------------------------
 
-        if valid_dataframe is not None:
-            valid_dataframe.unpersist()
+        if context.valid_dataframe is not None:
+            context.valid_dataframe.unpersist()
 
         if spark is not None:
             spark.stop()
