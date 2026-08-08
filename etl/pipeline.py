@@ -115,36 +115,61 @@ def main() -> None:
             "\n========== DATA QUALITY =========="
         )
 
+        null_count = null_records.count()
+
+        invalid_numeric_count = (
+            range_invalid_records.count()
+        )
+
+        invalid_categorical_count = (
+            allowed_value_invalid_records.count()
+        )
+
+        duplicate_count = (
+            duplicate_records.count()
+        )
+
+        valid_count = (
+            valid_dataframe.count()
+        )
+
+        invalid_count = (
+            invalid_dataframe.count()
+        )
+
+        total_count = (
+                valid_count + invalid_count
+        )
+
         logger.info(
             "Records with NULL values: %s",
-            null_records.count(),
+            null_count,
         )
 
         logger.info(
             "Records with invalid numeric values: %s",
-            range_invalid_records.count(),
+            invalid_numeric_count,
         )
 
         logger.info(
             "Records with invalid categorical values: %s",
-            allowed_value_invalid_records.count(),
+            invalid_categorical_count,
         )
 
         logger.info(
             "Duplicate records: %s",
-            duplicate_records.count(),
+            duplicate_count,
         )
 
         logger.info(
             "Valid records: %s",
-            valid_dataframe.count(),
+            valid_count,
         )
 
         logger.info(
             "Invalid records: %s",
-            invalid_dataframe.count(),
+            invalid_count,
         )
-
         # ---------------------------------
         # Invalid Numeric Records
         # ---------------------------------
@@ -489,6 +514,33 @@ def main() -> None:
         save_rejected_records(
             invalid_dataframe,
             str(REJECTED_DATA_FILE),
+        )
+        print(
+            "\n========== PIPELINE SUMMARY =========="
+        )
+
+        print(
+            f"Total records: {total_count}"
+        )
+
+        print(
+            f"Valid records: {valid_count}"
+        )
+
+        print(
+            f"Rejected records: {invalid_count}"
+        )
+
+        print(
+            f"Duplicate records: {duplicate_count}"
+        )
+
+        print(
+            f"NULL records: {null_count}"
+        )
+
+        print(
+            "Pipeline status: SUCCESS"
         )
 
         logger.info(
