@@ -1,5 +1,6 @@
 from etl.spark_session import create_spark_session
 from etl.pipeline_context import PipelineContext
+
 from etl.reporting import (
     print_data_quality_report,
     print_spark_sql_report,
@@ -7,6 +8,8 @@ from etl.reporting import (
     print_pipeline_summary,
     print_pipeline_performance,
 )
+
+from etl.stage_runner import run_stage
 
 from etl.stages import (
     extract_data,
@@ -71,45 +74,28 @@ def main() -> None:
             "Starting data extraction."
         )
 
-        extract_start_time = (
-            time.perf_counter()
-        )
-
-        context.dataframe = extract_data(
+        context.dataframe, extract_duration = run_stage(
+            "Extract",
+            extract_data,
             spark,
             str(RAW_DATA_FILE),
-        )
-
-
-        extract_duration = (
-            time.perf_counter()
-            - extract_start_time
-        )
-
-        logger.info(
-            "Extract stage completed in %.2f seconds.",
-            extract_duration,
         )
 
         # ---------------------------------
         # Data Quality
         # ---------------------------------
 
-        quality_start_time = (
-            time.perf_counter()
-        )
-
         (
-            context.valid_dataframe,
-            context.invalid_dataframe,
-            context.quality_metrics,
-        ) = validate_data(
+            (
+                context.valid_dataframe,
+                context.invalid_dataframe,
+                context.quality_metrics,
+            ),
+            quality_duration,
+        ) = run_stage(
+            "Data Quality",
+            validate_data,
             context.dataframe,
-        )
-
-        quality_duration = (
-            time.perf_counter()
-            - quality_start_time
         )
 
         # ---------------------------------
@@ -141,8 +127,6 @@ def main() -> None:
         # ---------------------------------
         # Data Quality Report
         # ---------------------------------
-
-
 
         null_count = (
             null_records.count()
@@ -231,34 +215,18 @@ def main() -> None:
             truncate=False,
         )
 
-        logger.info(
-            "Data quality stage completed in %.2f seconds.",
-            quality_duration,
-        )
-
         # ---------------------------------
         # Analytics
         # ---------------------------------
 
-        analytics_start_time = (
-            time.perf_counter()
-        )
-
-        context.analytics_results = run_analytics(
+        (
+            context.analytics_results,
+            analytics_duration,
+        ) = run_stage(
+            "Analytics",
+            run_analytics,
             spark,
             context.dataframe,
-        )
-
-
-
-        analytics_duration = (
-            time.perf_counter()
-            - analytics_start_time
-        )
-
-        logger.info(
-            "Analytics stage completed in %.2f seconds.",
-            analytics_duration,
         )
 
         # ---------------------------------
@@ -309,7 +277,6 @@ def main() -> None:
         # Spark SQL Reports
         # ---------------------------------
 
-
         print_spark_sql_report(
             total_records=total_records,
             cost_by_project=cost_by_project,
@@ -325,40 +292,26 @@ def main() -> None:
         # Window Function Report
         # ---------------------------------
 
-        print(
-            f"\nTop {TOP_INSTANCES_PER_REGION} "
-            "Most Expensive Running "
-            "Instances by Region"
-        )
-
-        top_instances_by_region.select(
-            "region",
-            "instance_id",
-            "project_name",
-            "instance_type",
-            "daily_cost_usd",
-            "rank",
-        ).show(
-            truncate=False,
-        )
+        # Window function output is already
+        # included in print_spark_sql_report()
 
         # ---------------------------------
         # Transformation
         # ---------------------------------
 
-        transform_start_time = (
-            time.perf_counter()
-        )
-
         (
-            context.running_dataframe,
-            region_counts,
-            cpu_report,
-            memory_report,
-        ) = transform_data(
+            (
+                context.running_dataframe,
+                region_counts,
+                cpu_report,
+                memory_report,
+            ),
+            transform_duration,
+        ) = run_stage(
+            "Transformation",
+            transform_data,
             context.valid_dataframe,
         )
-
 
         # ---------------------------------
         # DataFrame Reports
@@ -371,42 +324,22 @@ def main() -> None:
             running_dataframe=context.running_dataframe,
         )
 
-
         demonstrate_partitioning(
             context.running_dataframe,
-        )
-
-        transform_duration = (
-            time.perf_counter()
-            - transform_start_time
-        )
-
-        logger.info(
-            "Transformation stage completed in %.2f seconds.",
-            transform_duration,
         )
 
         # ---------------------------------
         # Load
         # ---------------------------------
 
-        load_start_time = (
-            time.perf_counter()
-        )
-
-        load_data(
+        (
+            _,
+            load_duration,
+        ) = run_stage(
+            "Load",
+            load_data,
             context.running_dataframe,
             context.invalid_dataframe,
-        )
-
-        load_duration = (
-            time.perf_counter()
-            - load_start_time
-        )
-
-        logger.info(
-            "Load stage completed in %.2f seconds.",
-            load_duration,
         )
 
         # ---------------------------------
@@ -420,7 +353,6 @@ def main() -> None:
             duplicate_count=duplicate_count,
             null_count=null_count,
         )
-
 
         # ---------------------------------
         # Pipeline Performance
