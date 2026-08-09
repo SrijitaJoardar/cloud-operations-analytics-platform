@@ -6,6 +6,17 @@ from pyspark.sql.functions import (
     when,
 )
 
+from config.constants import (
+    REGIONS,
+    STATUS,
+    CPU_USAGE_MIN,
+    CPU_USAGE_MAX,
+    MEMORY_USAGE_MIN,
+    MEMORY_USAGE_MAX,
+    RUNNING_HOURS_MIN,
+    RUNNING_HOURS_MAX,
+    DAILY_COST_MIN,
+)
 
 REQUIRED_COLUMNS = [
     "date",
@@ -18,19 +29,7 @@ REQUIRED_COLUMNS = [
 ]
 
 
-VALID_STATUSES = [
-    "Running",
-    "Stopped",
-]
 
-
-VALID_REGIONS = [
-    "ap-south-1",
-    "ap-southeast-1",
-    "eu-west-1",
-    "us-east-1",
-    "us-west-2",
-]
 
 
 def build_null_condition():
@@ -64,13 +63,13 @@ def build_numeric_invalid_condition():
     """
 
     return (
-        (col("cpu_usage") <= 0)
-        | (col("cpu_usage") >= 100)
-        | (col("memory_usage") <= 0)
-        | (col("memory_usage") >= 100)
-        | (col("running_hours") < 0)
-        | (col("running_hours") > 24)
-        | (col("daily_cost_usd") < 0)
+            (col("cpu_usage") <= CPU_USAGE_MIN)
+            | (col("cpu_usage") >= CPU_USAGE_MAX)
+            | (col("memory_usage") <= MEMORY_USAGE_MIN)
+            | (col("memory_usage") >= MEMORY_USAGE_MAX)
+            | (col("running_hours") < RUNNING_HOURS_MIN)
+            | (col("running_hours") > RUNNING_HOURS_MAX)
+            | (col("daily_cost_usd") < DAILY_COST_MIN)
     )
 
 
@@ -80,12 +79,12 @@ def build_categorical_invalid_condition():
     """
 
     return (
-        ~col("status").isin(
-            VALID_STATUSES
-        )
-        | ~col("region").isin(
-            VALID_REGIONS
-        )
+            ~col("status").isin(
+                STATUS
+            )
+            | ~col("region").isin(
+        REGIONS
+    )
     )
 
 

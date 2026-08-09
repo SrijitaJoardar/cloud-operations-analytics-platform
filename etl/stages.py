@@ -1,6 +1,7 @@
 from pyspark.sql import DataFrame, SparkSession
 from pyspark.sql.window import Window
 from pyspark.sql.functions import row_number, col
+from config.constants import RUNNING_STATUS
 
 from etl.extract import extract_cloud_usage_data
 
@@ -292,7 +293,7 @@ def run_analytics(
     ranked_instances = (
         dataframe
         .filter(
-            col("status") == "Running"
+            col("status") == RUNNING_STATUS
         )
         .withColumn(
             "rank",

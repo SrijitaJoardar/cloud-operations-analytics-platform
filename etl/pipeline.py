@@ -31,6 +31,7 @@ import time
 from config.settings import (
     RAW_DATA_FILE,
     TOP_INSTANCES_PER_REGION,
+    validate_configuration,
 )
 
 
@@ -51,6 +52,8 @@ def main() -> None:
     context = PipelineContext()
 
     try:
+
+        validate_configuration()
 
         # ---------------------------------
         # Create Spark Session

@@ -1,5 +1,6 @@
 from pyspark.sql import DataFrame
 from pyspark.sql.functions import avg, col, round
+from config.constants import RUNNING_STATUS
 
 
 def select_required_columns(
@@ -28,7 +29,7 @@ def filter_running_instances(
     """
 
     return dataframe.filter(
-        dataframe.status == "Running"
+        dataframe.status == RUNNING_STATUS
     )
 
 

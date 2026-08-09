@@ -67,9 +67,13 @@ ENVIRONMENTS = [
     "Production",
 ]
 
+RUNNING_STATUS = "Running"
+
+STOPPED_STATUS = "Stopped"
+
 STATUS = [
-    "Running",
-    "Stopped",
+    RUNNING_STATUS,
+    STOPPED_STATUS,
 ]
 
 PROJECT_NAMES = [

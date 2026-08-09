@@ -29,6 +29,7 @@ from config.constants import (
     ACCOUNT_IDS,
     REGION_TO_AVAILABILITY_ZONES,
     INSTANCE_TYPE_HOURLY_COST,
+    RUNNING_STATUS,
 )
 
 
@@ -269,7 +270,7 @@ def generate_cpu_usage(
     cpu_usage = []
 
     for status in statuses:
-        if status == "Running":
+        if status == RUNNING_STATUS:
             cpu_usage.append(round(uniform(10, 95), 2))
         else:
             cpu_usage.append(round(uniform(0, 2), 2))
@@ -287,7 +288,7 @@ def generate_memory_usage(
     memory_usage = []
 
     for status in statuses:
-        if status == "Running":
+        if status == RUNNING_STATUS:
             memory_usage.append(round(uniform(20, 90), 2))
         else:
             memory_usage.append(round(uniform(0, 2), 2))
@@ -321,7 +322,7 @@ def generate_network_in(
     network_in = []
 
     for status in statuses:
-        if status == "Running":
+        if status == RUNNING_STATUS:
             network_in.append(round(uniform(100, 5000), 2))
         else:
             network_in.append(round(uniform(0, 5), 2))
@@ -338,7 +339,7 @@ def generate_network_out(
     network_out = []
 
     for status in statuses:
-        if status == "Running":
+        if status == RUNNING_STATUS:
             network_out.append(round(uniform(100, 5000), 2))
         else:
             network_out.append(round(uniform(0, 5), 2))
@@ -356,7 +357,7 @@ def generate_running_hours(
     running_hours = []
 
     for status in statuses:
-        if status == "Running":
+        if status == RUNNING_STATUS:
             running_hours.append(round(uniform(8, 24), 2))
         else:
             running_hours.append(round(uniform(0, 2), 2))
@@ -382,7 +383,7 @@ def generate_daily_cost(
     ):
         hourly_rate = INSTANCE_TYPE_HOURLY_COST[instance_type]
 
-        if status == "Running":
+        if status == RUNNING_STATUS:
             cost = hourly_rate * hours
         else:
             cost = 0.10
